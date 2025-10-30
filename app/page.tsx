@@ -4,6 +4,40 @@ import AuthModal from "../components/AuthModal";
 
 export default function HomePage() {
   const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    const emailTrimmed = email.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailTrimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Something went wrong");
+      setMessage("You're on the waitlist! We'll be in touch soon.");
+      setEmail("");
+    } catch (err: any) {
+      setError(err?.message || "Submission failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
   return (
     <div className="grid gap-16">
       <section className="text-center py-6">
@@ -17,10 +51,44 @@ export default function HomePage() {
         <p className="mt-5 text-gray-600 max-w-2xl mx-auto">
           Find roles faster, apply automatically with AI, and prepare for interviews in company-specific hubs—all in one place.
         </p>
+        {/*
         <div className="mt-7 flex justify-center gap-4">
           <button className="px-5 py-2.5 rounded-lg bg-blue-600 text-white shadow hover:bg-blue-700 transition" onClick={() => setOpen(true)}>Get started free</button>
           <a className="px-5 py-2.5 rounded-lg border border-gray-300 hover:border-gray-400 transition" href="/prep">Start prep</a>
         </div>
+        */}
+        <form onSubmit={handleSubmit} className="mt-8 max-w-xl mx-auto">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="Enter your email to join the waitlist"
+              className="w-full rounded-md border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder-gray-400 shadow-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
+              aria-label="Email address"
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex items-center justify-center rounded-md bg-gray-900 px-6 py-3 font-medium text-white shadow-sm transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting ? "Joining…" : "Join the Waitlist"}
+            </button>
+          </div>
+          {message && (
+            <p className="mt-3 text-sm text-green-700" role="status">
+              {message}
+            </p>
+          )}
+          {error && (
+            <p className="mt-3 text-sm text-red-700" role="alert">
+              {error}
+            </p>
+          )}
+        </form>
       </section>
 
       <section className="grid md:grid-cols-3 gap-6">
