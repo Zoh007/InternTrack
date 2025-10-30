@@ -25,7 +25,7 @@ if (
   );
 }
 
-export const authOptions = {
+const authOptions = {
   providers,
   session: { strategy: "jwt" },
   callbacks: {
