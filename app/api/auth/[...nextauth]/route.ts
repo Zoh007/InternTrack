@@ -25,9 +25,9 @@ if (
   );
 }
 
-const authOptions = {
+const authOptions: any = {
   providers,
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt" as const },
   callbacks: {
     async jwt({ token, account }: any) {
       if (account) {
