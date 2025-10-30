@@ -29,13 +29,13 @@ const authOptions = {
   providers,
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, account }) {
+    async jwt({ token, account }: any) {
       if (account) {
         token.provider = account.provider;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       // attach provider info for UI if needed
       // @ts-expect-error custom
       session.provider = token.provider;
