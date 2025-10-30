@@ -1,0 +1,9 @@
+# Node & environment (optional common ignores)
+node_modules/
+.env*
+.DS_Store
+
+# Private docs (do not commit internal roadmaps/notes)
+docs/private/**
+
+
