@@ -37,7 +37,6 @@ const authOptions = {
     },
     async session({ session, token }: any) {
       // attach provider info for UI if needed
-      // @ts-expect-error custom
       session.provider = token.provider;
       return session;
     },
