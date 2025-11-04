@@ -31,11 +31,23 @@ RAPIDAPI_KEY=your-rapidapi-key
 ADZUNA_APP_ID=your-adzuna-app-id
 ADZUNA_APP_KEY=your-adzuna-app-key
 
+# Additional Job Search APIs (Optional - Free registration required)
+# USAJOBS API - Official US government job listings
+# Sign up at: https://developer.usajobs.gov/
+USAJOBS_API_KEY=your-usajobs-api-key
+USAJOBS_USER_AGENT=your-email@example.com
+
+# Jooble API - Meta-search engine for jobs worldwide
+# Sign up at: https://uk.jooble.org/api/about
+JOOBLE_API_KEY=your-jooble-api-key
+
+# Careerjet API - Job aggregator covering 90+ countries
+# Sign up at: https://www.careerjet.com/partners/api/
+CAREERJET_API_KEY=your-careerjet-publisher-key
+
 # FREE APIs (No API keys needed - Real job data):
-# - GitHub Jobs API (github.com/jobs)
 # - RemoteOK API (remoteok.com) - Remote jobs
 # - Arbeitnow API (arbeitnow.com) - Europe + remote jobs
-# - GraphQL Jobs API (graphql.jobs) - Tech jobs
 
 # AI Form Filling (Optional - for intelligent application form filling)
 # Sign up at: https://platform.openai.com/

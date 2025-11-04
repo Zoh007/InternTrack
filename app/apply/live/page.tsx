@@ -291,7 +291,16 @@ export default function LiveDashboardPage() {
       {/* Found Jobs - Real-time */}
       <div className="bg-white rounded-lg border shadow-sm p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Jobs Found ({foundJobs.length})</h2>
+          <div>
+            <h2 className="text-xl font-semibold">
+              Jobs Found ({sessionStatus?.target_count || foundJobs.length})
+            </h2>
+            {foundJobs.length > (sessionStatus?.target_count || 0) && (
+              <p className="text-xs text-gray-500 mt-1">
+                Found {foundJobs.length} total jobs (showing top {sessionStatus?.target_count || foundJobs.length})
+              </p>
+            )}
+          </div>
           <span className="text-sm text-gray-500">
             {sessionStatus?.status === "searching" && (
               <span className="inline-flex items-center gap-2">
@@ -309,7 +318,7 @@ export default function LiveDashboardPage() {
                 : "No jobs found yet"}
             </p>
           ) : (
-            foundJobs.map((job) => {
+            foundJobs.slice(0, sessionStatus?.target_count || foundJobs.length).map((job) => {
               const isDisabled = applyingJobId === job.id || applications.some(
                 app => app.job_title === job.title && app.company_name === job.company && app.status === "applied"
               );

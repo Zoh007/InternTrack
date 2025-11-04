@@ -25,6 +25,9 @@ interface JobResult {
 
 // Main search function - searches all sources in parallel
 export async function searchAllSources(query: JobSearchQuery): Promise<JobResult[]> {
+  console.log(`[searchAllSources] Starting search with locations:`, query.locations);
+  console.log(`[searchAllSources] Keywords:`, query.keywords);
+  
   const searchPromises = [
     searchLinkedIn(query),
     searchIndeed(query),
@@ -37,7 +40,7 @@ export async function searchAllSources(query: JobSearchQuery): Promise<JobResult
 
   // Combine results from all sources
   const allJobs: JobResult[] = [];
-  const sourceNames = ["LinkedIn/JSearch", "Indeed/Adzuna", "RemoteOK", "Internship Boards"];
+  const sourceNames = ["LinkedIn/JSearch", "Indeed/Adzuna", "RemoteOK", "Additional Boards (USAJobs/Jooble/Careerjet)"];
   results.forEach((result, index) => {
     if (result.status === "fulfilled" && result.value) {
       const jobCount = result.value.length;
@@ -54,9 +57,36 @@ export async function searchAllSources(query: JobSearchQuery): Promise<JobResult
 
   // Remove duplicates by URL
   const uniqueJobs = removeDuplicates(allJobs);
+  console.log(`[searchAllSources] After deduplication: ${uniqueJobs.length} jobs`);
 
   // Filter by preferences and return top matches
-  return filterAndSort(uniqueJobs, query).slice(0, query.limit);
+  const filtered = filterAndSort(uniqueJobs, query);
+  console.log(`[searchAllSources] After filtering: ${filtered.length} jobs`);
+  
+  return filtered.slice(0, query.limit);
+}
+
+// Helper function to normalize location for API calls
+function normalizeLocationForAPI(location: string): string {
+  if (!location) return "United States";
+  
+  // Remove country name if present (e.g., "Atlanta, GA, United States" -> "Atlanta, GA")
+  const parts = location.split(',').map(p => p.trim());
+  if (parts.length > 2) {
+    // Remove country (last part)
+    return parts.slice(0, 2).join(', ');
+  }
+  return location;
+}
+
+// Helper function to extract country code for APIs that need it
+function extractCountryCode(location: string): string {
+  const locationLower = location.toLowerCase();
+  if (locationLower.includes("united states") || locationLower.includes("usa") || locationLower.includes("us")) {
+    return "us";
+  }
+  // Add more country mappings as needed
+  return "us"; // Default to US
 }
 
 // LinkedIn Job Search - Using JSearch API (RapidAPI) - FREE tier available
@@ -75,7 +105,9 @@ async function searchLinkedIn(query: JobSearchQuery): Promise<JobResult[]> {
     }
 
     const keywords = query.keywords.join(" ");
-    const location = query.locations[0] || "United States";
+    const location = normalizeLocationForAPI(query.locations[0] || "United States");
+    
+    console.log(`[searchLinkedIn] Searching with location: "${location}"`);
     
     const response = await fetch(
       `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}&page=1&num_pages=3`,
@@ -94,7 +126,7 @@ async function searchLinkedIn(query: JobSearchQuery): Promise<JobResult[]> {
 
     const data = await response.json();
     
-    return (data.data || []).map((job: any) => ({
+    const jobs = (data.data || []).map((job: any) => ({
       title: job.job_title || "",
       company: job.employer_name || "",
       location: job.job_city + ", " + job.job_state || job.job_country || "",
@@ -107,6 +139,9 @@ async function searchLinkedIn(query: JobSearchQuery): Promise<JobResult[]> {
       description: job.job_description || "",
       source: "jsearch_linkedin",
     }));
+    
+    console.log(`[searchLinkedIn] Found ${jobs.length} jobs`);
+    return jobs;
   } catch (error) {
     console.warn("[searchLinkedIn] Error:", error instanceof Error ? error.message : "Unknown error");
     return [];
@@ -119,11 +154,14 @@ async function searchIndeed(query: JobSearchQuery): Promise<JobResult[]> {
     // Adzuna API - FREE, searches Indeed, CareerBuilder, Monster and more
     // No authentication required for basic usage
     const keywords = query.keywords.join(" ");
-    const location = query.locations[0] || "us";
+    // Adzuna needs country code, not city name
+    const countryCode = extractCountryCode(query.locations[0] || "United States");
+    
+    console.log(`[searchIndeed] Searching with country code: "${countryCode}" for location: "${query.locations[0]}"`);
     
     // Try Adzuna - they have a free tier
     const response = await fetch(
-      `https://api.adzuna.com/v1/api/jobs/${location}/search/1?app_id=${process.env.ADZUNA_APP_ID || 'demo'}&app_key=${process.env.ADZUNA_APP_KEY || 'demo'}&results_per_page=25&what=${encodeURIComponent(keywords)}`,
+      `https://api.adzuna.com/v1/api/jobs/${countryCode}/search/1?app_id=${process.env.ADZUNA_APP_ID || 'demo'}&app_key=${process.env.ADZUNA_APP_KEY || 'demo'}&results_per_page=25&what=${encodeURIComponent(keywords)}&where=${encodeURIComponent(normalizeLocationForAPI(query.locations[0] || ""))}`,
       {
         headers: {
           "Accept": "application/json",
@@ -132,18 +170,20 @@ async function searchIndeed(query: JobSearchQuery): Promise<JobResult[]> {
     );
 
     if (!response.ok) {
-      // If Adzuna fails, try Jobs API (free alternative)
-      return await searchJobsAPI(query);
+      // If Adzuna fails, return empty (no fallback - GitHub Jobs API is offline)
+      console.warn(`[searchIndeed] Adzuna API error: ${response.status}`);
+      return [];
     }
 
     const contentType = response.headers.get("content-type");
     if (!contentType?.includes("application/json")) {
-      return await searchJobsAPI(query);
+      console.warn("[searchIndeed] Response is not JSON");
+      return [];
     }
 
     const data = await response.json();
     
-    return (data.results || []).map((job: any) => ({
+    const jobs = (data.results || []).map((job: any) => ({
       title: job.title || "",
       company: job.company?.display_name || "",
       location: job.location?.display_name || "",
@@ -156,43 +196,11 @@ async function searchIndeed(query: JobSearchQuery): Promise<JobResult[]> {
       description: job.description || "",
       source: "adzuna",
     }));
-  } catch (error) {
-    console.warn("[searchIndeed] Error, trying fallback:", error instanceof Error ? error.message : "Unknown error");
-    return await searchJobsAPI(query);
-  }
-}
-
-// Fallback: Jobs API - FREE, no auth
-async function searchJobsAPI(query: JobSearchQuery): Promise<JobResult[]> {
-  try {
-    const keywords = query.keywords.join(" ");
-    const location = query.locations[0] || "United States";
     
-    // Jobs API - completely free, no auth
-    const response = await fetch(
-      `https://jobs.github.com/positions.json?description=${encodeURIComponent(keywords)}&location=${encodeURIComponent(location)}`,
-      {
-        headers: {
-          "Accept": "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    
-    return (data || []).map((job: any) => ({
-      title: job.title || "",
-      company: job.company || "",
-      location: job.location || "",
-      url: job.url || job.how_to_apply || "",
-      remote: job.type?.toLowerCase().includes("remote") || false,
-      internshipType: "summer",
-      description: job.description || "",
-      source: "github_jobs",
-    }));
+    console.log(`[searchIndeed] Found ${jobs.length} jobs`);
+    return jobs;
   } catch (error) {
+    console.warn("[searchIndeed] Error:", error instanceof Error ? error.message : "Unknown error");
     return [];
   }
 }
@@ -266,7 +274,9 @@ async function searchInternshipBoards(query: JobSearchQuery): Promise<JobResult[
     // Search multiple FREE APIs in parallel for maximum coverage
     const boardSearches = [
       searchArbeitnow(query), // FREE - Europe & remote jobs
-      searchGraphQLJobs(query), // FREE - GraphQL Jobs API
+      searchUSAJobs(query), // FREE - US Government jobs (requires API key)
+      searchJooble(query), // FREE - Meta-search engine worldwide (requires API key)
+      searchCareerjet(query), // FREE - Job aggregator 90+ countries (requires API key)
     ];
 
     const boardResults = await Promise.allSettled(boardSearches);
@@ -323,56 +333,182 @@ async function searchArbeitnow(query: JobSearchQuery): Promise<JobResult[]> {
   }
 }
 
-// GraphQL Jobs API - FREE, no auth
-async function searchGraphQLJobs(query: JobSearchQuery): Promise<JobResult[]> {
+// USAJOBS API - FREE, requires API key (US Government jobs)
+async function searchUSAJobs(query: JobSearchQuery): Promise<JobResult[]> {
   try {
-    const keywords = query.keywords.join(" ");
+    const apiKey = process.env.USAJOBS_API_KEY;
+    const userAgent = process.env.USAJOBS_USER_AGENT || "your-email@example.com";
     
-    // GraphQL endpoint
-    const response = await fetch("https://api.graphql.jobs/", {
-      method: "POST",
+    if (!apiKey) {
+      // USAJOBS is optional - requires free registration
+      // Sign up at: https://developer.usajobs.gov/
+      return [];
+    }
+
+    const keywords = query.keywords.join(" ");
+    const location = query.locations[0] || "";
+    
+    // USAJOBS API - Official US government job listings
+    const url = new URL("https://data.usajobs.gov/api/Search");
+    url.searchParams.set("Keyword", keywords);
+    if (location && !location.toLowerCase().includes("remote")) {
+      url.searchParams.set("LocationName", location);
+    }
+    url.searchParams.set("ResultsPerPage", "25");
+    
+    const response = await fetch(url.toString(), {
       headers: {
-        "Content-Type": "application/json",
+        "Host": "data.usajobs.gov",
+        "User-Agent": userAgent,
+        "Authorization-Key": apiKey,
       },
-      body: JSON.stringify({
-        query: `
-          query {
-            jobs(input: {
-              location: "${query.locations[0] || ""}"
-              slug: "${keywords.toLowerCase()}"
-            }) {
-              id
-              title
-              company {
-                name
-              }
-              locationNames
-              remotes {
-                name
-              }
-              applyUrl
-              description
-            }
-          }
-        `,
-      }),
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.warn("[searchUSAJobs] API error:", response.status);
+      return [];
+    }
 
     const data = await response.json();
     
-    return (data.data?.jobs || []).map((job: any) => ({
-      title: job.title || "",
-      company: job.company?.name || "",
-      location: job.locationNames?.[0] || "Remote",
-      url: job.applyUrl || "",
-      remote: job.remotes?.length > 0 || false,
-      internshipType: "summer",
-      description: job.description || "",
-      source: "graphql_jobs",
-    }));
+    return (data.SearchResult?.SearchResultItems || []).map((item: any) => {
+      const job = item.MatchedObjectDescriptor || {};
+      return {
+        title: job.PositionTitle || "",
+        company: job.OrganizationName || "US Government",
+        location: job.PositionLocationDisplay || "",
+        url: job.PositionURI || "",
+        remote: job.PositionRemuneration?.[0]?.PositionRemunerationType?.includes("Remote") || false,
+        internshipType: job.PositionTitle?.toLowerCase().includes("intern") ? "summer" : undefined,
+        description: job.UserArea?.Details?.MajorDuties || job.QualificationSummary || "",
+        source: "usajobs",
+      };
+    }).filter((job: JobResult) => job.title && job.company && job.url);
   } catch (error) {
+    console.warn("[searchUSAJobs] Error:", error instanceof Error ? error.message : "Unknown error");
+    return [];
+  }
+}
+
+// Jooble API - FREE, meta-search engine worldwide
+async function searchJooble(query: JobSearchQuery): Promise<JobResult[]> {
+  try {
+    const apiKey = process.env.JOOBLE_API_KEY;
+    
+    if (!apiKey) {
+      // Jooble is optional - requires free registration
+      // Sign up at: https://uk.jooble.org/api/about
+      return [];
+    }
+
+    const keywords = query.keywords.join(" ");
+    const location = normalizeLocationForAPI(query.locations[0] || "");
+    
+    console.log(`[searchJooble] Searching with location: "${location}"`);
+    
+    // Jooble API - International job aggregation
+    const response = await fetch(
+      `https://jooble.org/api/${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keywords: keywords,
+          location: location,
+          page: 1,
+          searchMode: 1, // 1 = all jobs, 2 = jobs with salary
+          radius: 25,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn("[searchJooble] API error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    return (data.jobs || []).map((job: any) => ({
+      title: job.title || "",
+      company: job.company || "",
+      location: job.location || "",
+      url: job.link || "",
+      salary: job.salary
+        ? {
+            min: job.salary.match(/\d+/)?.[0] ? parseInt(job.salary.match(/\d+/)?.[0]) : undefined,
+            max: undefined,
+          }
+        : undefined,
+      remote: job.location?.toLowerCase().includes("remote") || false,
+      internshipType: job.title?.toLowerCase().includes("intern") ? "summer" : undefined,
+      description: job.snippet || "",
+      source: "jooble",
+    })).filter((job: JobResult) => job.title && job.company && job.url);
+  } catch (error) {
+    console.warn("[searchJooble] Error:", error instanceof Error ? error.message : "Unknown error");
+    return [];
+  }
+}
+
+// Careerjet API - FREE, job aggregator covering 90+ countries
+async function searchCareerjet(query: JobSearchQuery): Promise<JobResult[]> {
+  try {
+    const apiKey = process.env.CAREERJET_API_KEY;
+    
+    if (!apiKey) {
+      // Careerjet is optional - requires free publisher key
+      // Sign up at: https://www.careerjet.com/partners/api/
+      return [];
+    }
+
+    const keywords = query.keywords.join(" ");
+    const location = normalizeLocationForAPI(query.locations[0] || "United States");
+    
+    console.log(`[searchCareerjet] Searching with location: "${location}"`);
+    
+    // Careerjet API - Global job aggregator
+    const url = new URL("https://public.api.careerjet.net/search");
+    url.searchParams.set("locale_code", "en_US"); // Can be changed based on location
+    url.searchParams.set("keywords", keywords);
+    url.searchParams.set("location", location);
+    url.searchParams.set("pagesize", "25");
+    url.searchParams.set("page", "1");
+    url.searchParams.set("affid", apiKey);
+    
+    const response = await fetch(url.toString(), {
+      headers: {
+        "Accept": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.warn("[searchCareerjet] API error:", response.status);
+      return [];
+    }
+
+    const data = await response.json();
+    
+    return (data.jobs || []).map((job: any) => ({
+      title: job.title || "",
+      company: job.company || "",
+      location: job.locations || "",
+      url: job.url || "",
+      salary: job.salary
+        ? {
+            min: job.salary.match(/\d+/)?.[0] ? parseInt(job.salary.match(/\d+/)?.[0]) : undefined,
+            max: undefined,
+          }
+        : undefined,
+      remote: job.site || job.locations?.toLowerCase().includes("remote") || false,
+      internshipType: job.title?.toLowerCase().includes("intern") ? "summer" : undefined,
+      description: job.description || "",
+      source: "careerjet",
+    })).filter((job: JobResult) => job.title && job.company && job.url);
+  } catch (error) {
+    console.warn("[searchCareerjet] Error:", error instanceof Error ? error.message : "Unknown error");
     return [];
   }
 }
@@ -390,34 +526,219 @@ function removeDuplicates(jobs: JobResult[]): JobResult[] {
 }
 
 function filterAndSort(jobs: JobResult[], query: JobSearchQuery): JobResult[] {
-  return jobs
-    .filter((job) => {
-      // Quick keyword match
-      if (query.keywords.length > 0) {
-        const jobText = `${job.title} ${job.description || ""}`.toLowerCase();
-        const hasKeyword = query.keywords.some((keyword) =>
-          jobText.includes(keyword.toLowerCase())
-        );
-        if (!hasKeyword) return false;
+  console.log(`[filterAndSort] Starting with ${jobs.length} jobs`);
+  console.log(`[filterAndSort] Query locations:`, query.locations);
+  console.log(`[filterAndSort] Query keywords:`, query.keywords);
+  console.log(`[filterAndSort] Query remote:`, query.remote);
+  
+  // Log sample job locations for debugging
+  if (jobs.length > 0) {
+    console.log(`[filterAndSort] Sample job locations:`, jobs.slice(0, 5).map(j => ({
+      location: j.location,
+      remote: j.remote,
+      title: j.title.substring(0, 30)
+    })));
+  }
+  
+  const filtered = jobs.filter((job) => {
+    const filterReasons: string[] = [];
+    let passed = true;
+    
+    // Quick keyword match
+    if (query.keywords.length > 0) {
+      const jobText = `${job.title} ${job.description || ""}`.toLowerCase();
+      const hasKeyword = query.keywords.some((keyword) =>
+        jobText.includes(keyword.toLowerCase())
+      );
+      if (!hasKeyword) {
+        filterReasons.push(`Keyword mismatch: job doesn't contain any of ${query.keywords.join(', ')}`);
+        passed = false;
       }
+    }
+
+    // Location filter - check if job location matches any selected location
+    if (passed && query.locations && query.locations.length > 0) {
+      const jobLocationLower = (job.location || "").toLowerCase().trim();
+      const isRemote = job.remote || jobLocationLower.includes("remote");
+      
+      // Check if user selected "Remote" - if so, allow remote jobs
+      const hasRemoteSelected = query.locations.some(loc => 
+        loc.toLowerCase() === "remote"
+      );
+      
+      // If only "Remote" is selected, allow all jobs (both remote and non-remote)
+      const onlyRemoteSelected = query.locations.length === 1 && hasRemoteSelected;
+      
+      if (onlyRemoteSelected) {
+        // User only selected Remote - allow all jobs
+        // No filter reason needed
+      } else if (isRemote && hasRemoteSelected) {
+        // Remote job and user wants remote - allow it
+        // No filter reason needed
+      } else if (!isRemote) {
+        // Non-remote job - must match one of the selected locations
+        const nonRemoteLocations = query.locations.filter(loc => loc.toLowerCase() !== "remote");
+        
+        // If no non-remote locations selected, skip location filtering for non-remote jobs
+        if (nonRemoteLocations.length === 0) {
+          // Allow all non-remote jobs if only Remote was selected
+          // No filter reason needed
+        } else {
+          let locationMatchFound = false;
+          const locationMatchDetails: string[] = [];
+          
+          const matchesLocation = nonRemoteLocations.some(location => {
+            const locationLower = location.toLowerCase().trim();
+            
+            // Extract city/state from GeoNames format (e.g., "San Francisco, CA, United States" -> "San Francisco, CA")
+            const locationClean = locationLower.split(',').slice(0, 2).join(',').trim();
+            
+            // Exact match
+            if (jobLocationLower === locationLower || jobLocationLower === locationClean) {
+              locationMatchDetails.push(`Exact match: "${jobLocationLower}" === "${locationClean}"`);
+              return true;
+            }
+            
+            // Check if job location contains the selected location
+            if (jobLocationLower.includes(locationClean)) {
+              locationMatchDetails.push(`Job contains location: "${jobLocationLower}" includes "${locationClean}"`);
+              return true;
+            }
+            
+            // Check if selected location contains the job location
+            if (locationClean.includes(jobLocationLower)) {
+              locationMatchDetails.push(`Location contains job: "${locationClean}" includes "${jobLocationLower}"`);
+              return true;
+            }
+            
+            // Check for city, state format matching
+            const jobParts = jobLocationLower.split(',').map(p => p.trim());
+            const locationParts = locationClean.split(',').map(p => p.trim());
+            
+            // Match city name (first part) - more flexible matching
+            if (jobParts.length > 0 && locationParts.length > 0) {
+              const jobCity = jobParts[0].toLowerCase();
+              const locationCity = locationParts[0].toLowerCase();
+              
+              // Exact city match
+              if (jobCity === locationCity) {
+                locationMatchDetails.push(`City match: "${jobCity}" === "${locationCity}"`);
+                return true;
+              }
+              
+              // Partial city match (one contains the other)
+              if (jobCity.includes(locationCity) || locationCity.includes(jobCity)) {
+                locationMatchDetails.push(`Partial city match: "${jobCity}" vs "${locationCity}"`);
+                return true;
+              }
+            }
+            
+            // Match state/province name (second part)
+            if (jobParts.length > 1 && locationParts.length > 1) {
+              const jobState = jobParts[1].toLowerCase();
+              const locationState = locationParts[1].toLowerCase();
+              
+              // Exact state match
+              if (jobState === locationState) {
+                locationMatchDetails.push(`State match: "${jobState}" === "${locationState}"`);
+                return true;
+              }
+              
+              // State abbreviation matching
+              const stateAbbreviations: Record<string, string[]> = {
+                "california": ["ca", "cal"],
+                "new york": ["ny"],
+                "texas": ["tx"],
+                "florida": ["fl"],
+                "illinois": ["il"],
+                "pennsylvania": ["pa"],
+                "ohio": ["oh"],
+                "georgia": ["ga", "ga."],
+                "north carolina": ["nc"],
+                "michigan": ["mi"],
+              };
+              
+              // Check if one is abbreviation of the other
+              for (const [fullName, abbrevs] of Object.entries(stateAbbreviations)) {
+                if ((jobState === fullName && abbrevs.includes(locationState)) ||
+                    (locationState === fullName && abbrevs.includes(jobState))) {
+                  locationMatchDetails.push(`State abbreviation match: "${jobState}" vs "${locationState}"`);
+                  return true;
+                }
+              }
+              
+              // Also check if state names partially match
+              if (jobState.includes(locationState) || locationState.includes(jobState)) {
+                locationMatchDetails.push(`Partial state match: "${jobState}" vs "${locationState}"`);
+                return true;
+              }
+            }
+            
+            return false;
+          });
+          
+          if (!matchesLocation) {
+            filterReasons.push(`Location mismatch: job location "${job.location}" doesn't match any of ${nonRemoteLocations.join(', ')}`);
+            passed = false;
+          } else {
+            locationMatchFound = true;
+            if (locationMatchDetails.length > 0) {
+              filterReasons.push(`✓ Location matched: ${locationMatchDetails[0]}`);
+            }
+          }
+        }
+      } else {
+        // Remote job but user didn't select remote - skip it
+        filterReasons.push(`Remote job but user didn't select Remote`);
+        passed = false;
+      }
+    }
 
       // Remote filter
       if (query.remote && query.remote !== "any") {
-        if (query.remote === "remote" && !job.remote) return false;
-        if (query.remote === "onsite" && job.remote) return false;
+        if (query.remote === "remote" && !job.remote) {
+          filterReasons.push(`Remote filter: user wants remote but job is not remote`);
+          passed = false;
+        }
+        if (query.remote === "onsite" && job.remote) {
+          filterReasons.push(`Remote filter: user wants onsite but job is remote`);
+          passed = false;
+        }
       }
 
       // Salary filter
-      if (query.salaryMin && job.salary?.max && job.salary.max < query.salaryMin)
-        return false;
-      if (query.salaryMax && job.salary?.min && job.salary.min > query.salaryMax)
-        return false;
+      if (query.salaryMin && job.salary?.max && job.salary.max < query.salaryMin) {
+        filterReasons.push(`Salary too low: job max ${job.salary.max} < user min ${query.salaryMin}`);
+        passed = false;
+      }
+      if (query.salaryMax && job.salary?.min && job.salary.min > query.salaryMax) {
+        filterReasons.push(`Salary too high: job min ${job.salary.min} > user max ${query.salaryMax}`);
+        passed = false;
+      }
 
-      return true;
-    })
-    .sort((a, b) => {
-      // Sort by relevance (could add scoring algorithm)
-      return 0;
+      // Debug logging for filtered jobs
+      if (!passed && filterReasons.length > 0) {
+        console.log(`[filterAndSort] ❌ FILTERED OUT: "${job.title}" at ${job.company}`);
+        console.log(`  Location: "${job.location}" (remote: ${job.remote})`);
+        console.log(`  Reasons: ${filterReasons.join('; ')}`);
+      }
+
+      return passed;
     });
+  
+  console.log(`[filterAndSort] Filtered ${jobs.length} jobs -> ${filtered.length} jobs after location/keyword filtering`);
+  
+  // Log first few successful matches
+  if (filtered.length > 0) {
+    console.log(`[filterAndSort] ✓ Sample matches (first 3):`);
+    filtered.slice(0, 3).forEach(job => {
+      console.log(`  - "${job.title}" at ${job.company}, Location: "${job.location}"`);
+    });
+  }
+  
+  return filtered.sort((a, b) => {
+    // Sort by relevance (could add scoring algorithm)
+    return 0;
+  });
 }
 

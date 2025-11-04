@@ -76,13 +76,19 @@ async function processJobSearch(
 
   try {
     // Build search query from preferences
+    // Search for more jobs than target to account for failures, but we'll apply to exactly targetCount
+    // Buffer: 2x targetCount to ensure we have enough jobs even if many fail
+    const searchLimit = Math.max(targetCount * 2, 20); // Minimum 20 jobs to ensure we have enough
+    
     const searchQuery = {
       keywords: preferences.job_types || ["Software Engineer", "Developer", "Intern"],
       locations: preferences.locations || ["United States"],
       remote: preferences.remote_preference === "remote" ? "remote" : preferences.remote_preference === "hybrid" ? "hybrid" : "no",
       internshipTypes: ["summer", "fall", "spring"], // Default internship types
-      limit: Math.max(targetCount * 2, 100), // Get more jobs than needed to account for filtering and failures
+      limit: searchLimit, // Search for buffer amount, but will apply to exactly targetCount
     };
+    
+    console.log(`[processJobSearch] Target: EXACTLY ${targetCount} job applications, Searching for ${searchQuery.limit} jobs (buffer for failures)`);
 
     console.log(`[processJobSearch] Searching for jobs with query:`, searchQuery);
 
@@ -91,8 +97,12 @@ async function processJobSearch(
 
     console.log(`[processJobSearch] Found ${jobs.length} total jobs`);
 
-    // Store jobs in database
-    const jobsToInsert = jobs.map((job) => ({
+    // Store jobs in database - store all found jobs (up to search limit) as buffer
+    // But we'll only apply to exactly targetCount successful applications
+    const jobsToStore = jobs.slice(0, searchQuery.limit);
+    console.log(`[processJobSearch] Storing ${jobsToStore.length} jobs (will apply to EXACTLY ${targetCount} jobs)`);
+    
+    const jobsToInsert = jobsToStore.map((job) => ({
       session_id: sessionId,
       title: job.title,
       company: job.company,
@@ -112,7 +122,7 @@ async function processJobSearch(
       if (insertError) {
         console.error("[processJobSearch] Error inserting jobs:", insertError);
       } else {
-        console.log(`[processJobSearch] Inserted ${jobsToInsert.length} jobs into database`);
+        console.log(`[processJobSearch] Inserted ${jobsToInsert.length} jobs into database (target: ${targetCount})`);
       }
     }
 
@@ -152,7 +162,9 @@ async function startAutoApply(sessionId: string, userId: string, targetCount: nu
   let offset = 0;
   const batchSize = 50;
 
-  // Continue processing until we reach targetCount successful applications
+  console.log(`[startAutoApply] Starting auto-apply. Target: EXACTLY ${targetCount} successful applications.`);
+
+  // Continue processing until we reach EXACTLY targetCount successful applications
   while (successfulApplications < targetCount) {
     // Get more jobs (with offset to get next batch)
     const { data: jobs } = await supabase
@@ -177,8 +189,9 @@ async function startAutoApply(sessionId: string, userId: string, targetCount: nu
 
     // Process applications sequentially so we can show "Currently applying to..." in real-time
     for (const job of newJobs) {
-      // Check if we've reached the target
+      // Stop immediately when we reach EXACTLY targetCount successful applications
       if (successfulApplications >= targetCount) {
+        console.log(`[startAutoApply] Reached EXACT target of ${targetCount} successful applications. Stopping.`);
         break;
       }
 
@@ -188,12 +201,24 @@ async function startAutoApply(sessionId: string, userId: string, targetCount: nu
       // Count successful applications
       if (result?.success) {
         successfulApplications++;
+        console.log(`[startAutoApply] Successful application ${successfulApplications}/${targetCount}`);
+        
+        // Stop immediately if we've reached the exact target
+        if (successfulApplications >= targetCount) {
+          console.log(`[startAutoApply] Reached EXACT target of ${targetCount} successful applications. Stopping immediately.`);
+          break;
+        }
       }
       
       // Delay between applications to avoid rate limiting (longer delay for auto-apply)
       // Add random variation to avoid detection
       const delay = 2000 + Math.floor(Math.random() * 1000); // 2-3 seconds between applications
       await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    // Double-check: If we've reached target, break out of while loop
+    if (successfulApplications >= targetCount) {
+      break;
     }
 
     offset += batchSize;
@@ -214,18 +239,21 @@ async function startAutoApply(sessionId: string, userId: string, targetCount: nu
 
   const actualCount = sessionData?.current_count || successfulApplications;
 
+  // Ensure we don't exceed targetCount
+  const finalCount = Math.min(actualCount, targetCount);
+
   // Mark as completed
   await supabase
     .from("auto_apply_sessions")
     .update({ 
       status: "completed", 
       completed_at: new Date().toISOString(),
-      current_count: actualCount,
+      current_count: finalCount,
       updated_at: new Date().toISOString()
     })
     .eq("id", sessionId);
 
-  console.log(`[startAutoApply] Completed. Target: ${targetCount}, Actual successful: ${actualCount}`);
+  console.log(`[startAutoApply] Completed. Target: EXACTLY ${targetCount}, Actual successful applications: ${finalCount}`);
 }
 
 // Fast job application function with actual form filling

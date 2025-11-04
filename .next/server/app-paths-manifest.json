@@ -1,8 +1,4 @@
 {
-  "/api/apply/start/route": "app/api/apply/start/route.js",
-  "/api/apply/search-jobs/route": "app/api/apply/search-jobs/route.js",
-  "/apply/page": "app/apply/page.js",
-  "/api/apply/status/route": "app/api/apply/status/route.js",
-  "/api/apply/events/route": "app/api/apply/events/route.js",
-  "/apply/live/page": "app/apply/live/page.js"
+  "/page": "app/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js"
 }
