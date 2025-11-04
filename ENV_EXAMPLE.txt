@@ -17,3 +17,33 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 # Fallback (works with permissive RLS policy):
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Job Search APIs (All FREE - Real Job Data)
+# JSearch API (RapidAPI) - Free tier: 250 requests/month
+# Sign up at: https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch
+JSEARCH_API_KEY=your-rapidapi-key
+# Or use RAPIDAPI_KEY if you have a general RapidAPI subscription
+RAPIDAPI_KEY=your-rapidapi-key
+
+# Adzuna API (Optional - Free tier available)
+# Searches Indeed, CareerBuilder, Monster and more
+# Sign up at: https://developer.adzuna.com/
+ADZUNA_APP_ID=your-adzuna-app-id
+ADZUNA_APP_KEY=your-adzuna-app-key
+
+# FREE APIs (No API keys needed - Real job data):
+# - GitHub Jobs API (github.com/jobs)
+# - RemoteOK API (remoteok.com) - Remote jobs
+# - Arbeitnow API (arbeitnow.com) - Europe + remote jobs
+# - GraphQL Jobs API (graphql.jobs) - Tech jobs
+
+# AI Form Filling (Optional - for intelligent application form filling)
+# Sign up at: https://platform.openai.com/
+# OpenAI API key enables AI-powered form filling and resume parsing
+OPENAI_API_KEY=your-openai-api-key
+
+# GeoNames API (Free - for location autocomplete)
+# Sign up at: https://www.geonames.org/login
+# Free tier: 3000 requests/hour
+# Enable web services in your account settings
+GEONAMES_USERNAME=your-geonames-username

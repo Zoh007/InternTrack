@@ -1,43 +1,85 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import AuthModal from "../components/AuthModal";
 
 export default function HomePage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [checkingUser, setCheckingUser] = useState(true);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setMessage(null);
-    setError(null);
+  // Check if logged-in user exists in Supabase, then redirect to apply page
+  useEffect(() => {
+    const checkUserAndRedirect = async () => {
+      if (status === "loading") return;
 
-    const emailTrimmed = email.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(emailTrimmed)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
+      if (session?.user?.email) {
+        // User is logged in, check if they exist in Supabase
+        try {
+          const response = await fetch("/api/user/check");
+          if (response.ok) {
+            const data = await response.json();
+            if (data.exists) {
+              // User exists in Supabase, redirect to apply page
+              router.push("/apply");
+              return;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to check user:", error);
+        }
+      }
+      setCheckingUser(false);
+    };
 
-    setIsSubmitting(true);
-    try {
-      const res = await fetch("/api/waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailTrimmed }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Something went wrong");
-      setMessage("You're on the waitlist! We'll be in touch soon.");
-      setEmail("");
-    } catch (err: any) {
-      setError(err?.message || "Submission failed. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    checkUserAndRedirect();
+  }, [session, status, router]);
+
+  if (status === "loading" || checkingUser) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    );
   }
+  // Waitlist form state - commented out for now
+  // const [email, setEmail] = useState("");
+  // const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [message, setMessage] = useState<string | null>(null);
+  // const [error, setError] = useState<string | null>(null);
+
+  // async function handleSubmit(e: React.FormEvent) {
+  //   e.preventDefault();
+  //   setMessage(null);
+  //   setError(null);
+
+  //   const emailTrimmed = email.trim();
+  //   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  //   if (!emailRegex.test(emailTrimmed)) {
+  //     setError("Please enter a valid email address.");
+  //     return;
+  //   }
+
+  //   setIsSubmitting(true);
+  //   try {
+  //     const res = await fetch("/api/waitlist", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ email: emailTrimmed }),
+  //     });
+  //     const data = await res.json();
+  //     if (!res.ok) throw new Error(data?.error || "Something went wrong");
+  //     setMessage("You're on the waitlist! We'll be in touch soon.");
+  //     setEmail("");
+  //   } catch (err: any) {
+  //     setError(err?.message || "Submission failed. Please try again.");
+  //   } finally {
+  //     setIsSubmitting(false);
+  //   }
+  // }
   return (
     <div className="grid gap-16">
       <section className="text-center py-6">
@@ -51,12 +93,10 @@ export default function HomePage() {
         <p className="mt-5 text-gray-600 max-w-2xl mx-auto">
           Find roles faster, apply automatically with AI, and prepare for interviews in company-specific hubs—all in one place.
         </p>
-        {/*
-        <div className="mt-7 flex justify-center gap-4">
+        <div className="mt-7 flex justify-center">
           <button className="px-5 py-2.5 rounded-lg bg-blue-600 text-white shadow hover:bg-blue-700 transition" onClick={() => setOpen(true)}>Get started free</button>
-          <a className="px-5 py-2.5 rounded-lg border border-gray-300 hover:border-gray-400 transition" href="/prep">Start prep</a>
         </div>
-        */}
+        {/* Waitlist form - commented out for now
         <form onSubmit={handleSubmit} className="mt-8 max-w-xl mx-auto">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
@@ -89,6 +129,7 @@ export default function HomePage() {
             </p>
           )}
         </form>
+        */}
       </section>
 
       <section className="grid md:grid-cols-3 gap-6">

@@ -7,3 +7,8 @@ node_modules/
 docs/private/**
 
 
+.vercel
+
+# Next.js build artifacts
+.next/trace
+.next/
