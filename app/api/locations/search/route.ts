@@ -161,7 +161,10 @@ export async function GET(request: Request) {
         return (b.population || 0) - (a.population || 0);
       })
       .slice(0, 10) // Take top 10 results
-      .map(({ population, countryCode, ...suggestion }) => suggestion); // Remove temporary fields
+      .map((suggestion: any) => {
+        const { population, countryCode, ...rest } = suggestion;
+        return rest;
+      }); // Remove temporary fields
 
     return NextResponse.json({ suggestions });
   } catch (error: any) {
