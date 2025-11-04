@@ -673,7 +673,7 @@ async function attemptSubmit(page: Page): Promise<boolean> {
       if (buttonHandle) {
         const element = buttonHandle.asElement();
         if (element) {
-          submitButton = element;
+          submitButton = element as ElementHandle<HTMLInputElement | HTMLButtonElement>;
         } else {
           await buttonHandle.dispose();
         }
