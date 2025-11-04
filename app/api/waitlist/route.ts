@@ -16,18 +16,27 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabaseServerClient();
-    const { error: dbError } = await supabase
+    const { data, error: dbError } = await supabase
       .from("waitlist_signups")
-      .upsert({ email }, { onConflict: "email" });
+      .upsert({ email, created_at: new Date().toISOString() }, { onConflict: "email" })
+      .select();
 
     if (dbError) {
-      console.error("[waitlist] insert failed", dbError);
-      return NextResponse.json({ error: "Database error" }, { status: 500 });
+      console.error("[waitlist] Database error:", dbError);
+      // Return more specific error message for debugging
+      return NextResponse.json({ 
+        error: "Database error", 
+        details: process.env.NODE_ENV === "development" ? dbError.message : undefined 
+      }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json({ error: "Unexpected error" }, { status: 500 });
+    return NextResponse.json({ ok: true, message: "You're on the waitlist!" });
+  } catch (err: any) {
+    console.error("[waitlist] Unexpected error:", err);
+    return NextResponse.json({ 
+      error: "Unexpected error. Please try again.",
+      details: process.env.NODE_ENV === "development" ? err.message : undefined
+    }, { status: 500 });
   }
 }
 
