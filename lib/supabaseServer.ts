@@ -5,22 +5,33 @@ export function getSupabaseServerClient() {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  // More detailed error messages
   if (!url) {
-    throw new Error("Supabase env var missing: set NEXT_PUBLIC_SUPABASE_URL");
+    const errorMsg = "Missing NEXT_PUBLIC_SUPABASE_URL. " +
+      "Set it in Vercel: Project Settings → Environment Variables";
+    console.error("[Supabase] " + errorMsg);
+    throw new Error(errorMsg);
   }
 
   const key = serviceRoleKey || anonKey;
   if (!key) {
-    throw new Error(
-      "Supabase key missing: set SUPABASE_SERVICE_ROLE_KEY (preferred) or NEXT_PUBLIC_SUPABASE_ANON_KEY"
-    );
+    const errorMsg = "Missing Supabase key. " +
+      "Set SUPABASE_SERVICE_ROLE_KEY (preferred) or NEXT_PUBLIC_SUPABASE_ANON_KEY " +
+      "in Vercel: Project Settings → Environment Variables";
+    console.error("[Supabase] " + errorMsg);
+    throw new Error(errorMsg);
   }
 
   // Validate URL format
   try {
     new URL(url);
   } catch (e) {
-    throw new Error(`Invalid Supabase URL format: ${url}`);
+    throw new Error(`Invalid Supabase URL format: ${url}. Should be like https://xxxxx.supabase.co`);
+  }
+
+  // Log in development (never in production)
+  if (process.env.NODE_ENV === "development") {
+    console.log("[Supabase] Connecting to:", url.substring(0, 30) + "...");
   }
 
   return createClient(url, key, {

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "../../../lib/supabaseServer";
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
@@ -15,7 +17,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid email" }, { status: 400 });
     }
 
-    const supabase = getSupabaseServerClient();
+    // Get Supabase client - this will throw if env vars are missing
+    let supabase;
+    try {
+      supabase = getSupabaseServerClient();
+    } catch (configError: any) {
+      console.error("[waitlist] Configuration error:", configError);
+      return NextResponse.json({ 
+        error: "Configuration error",
+        details: configError.message || "Missing Supabase configuration. Check environment variables in Vercel.",
+        hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel project settings"
+      }, { status: 500 });
+    }
     const { data, error: dbError } = await supabase
       .from("waitlist_signups")
       .upsert({ email, created_at: new Date().toISOString() }, { onConflict: "email" })
@@ -28,7 +41,7 @@ export async function POST(request: Request) {
         error: "Database error", 
         details: dbError.message || dbError.details || "Unknown database error",
         code: dbError.code || "unknown",
-        hint: dbError.hint || undefined
+        hint: dbError.hint || "Check if the waitlist_signups table exists in Supabase"
       }, { status: 500 });
     }
 
