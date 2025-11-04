@@ -29,10 +29,28 @@ export async function POST(request: Request) {
         hint: "Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel project settings"
       }, { status: 500 });
     }
-    const { data, error: dbError } = await supabase
-      .from("waitlist_signups")
-      .upsert({ email, created_at: new Date().toISOString() }, { onConflict: "email" })
-      .select();
+    // Attempt database operation with better error handling
+    let dbResult;
+    try {
+      dbResult = await supabase
+        .from("waitlist_signups")
+        .upsert({ email, created_at: new Date().toISOString() }, { onConflict: "email" })
+        .select();
+    } catch (fetchError: any) {
+      console.error("[waitlist] Database fetch error:", fetchError);
+      // This catches network/fetch errors
+      if (fetchError?.message?.includes("fetch failed") || fetchError?.code === "ENOTFOUND" || fetchError?.code === "ECONNREFUSED") {
+        return NextResponse.json({ 
+          error: "Database connection failed",
+          details: "Cannot reach Supabase. Check your NEXT_PUBLIC_SUPABASE_URL in Vercel environment variables.",
+          message: fetchError.message,
+          hint: "Go to Vercel Project Settings → Environment Variables and ensure NEXT_PUBLIC_SUPABASE_URL is set correctly"
+        }, { status: 500 });
+      }
+      throw fetchError; // Re-throw if not a fetch error
+    }
+
+    const { data, error: dbError } = dbResult;
 
     if (dbError) {
       console.error("[waitlist] Database error:", dbError);
