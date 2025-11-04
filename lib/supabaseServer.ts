@@ -16,6 +16,13 @@ export function getSupabaseServerClient() {
     );
   }
 
+  // Validate URL format
+  try {
+    new URL(url);
+  } catch (e) {
+    throw new Error(`Invalid Supabase URL format: ${url}`);
+  }
+
   return createClient(url, key, {
     auth: { persistSession: false },
   });

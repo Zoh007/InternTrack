@@ -35,9 +35,27 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "You're on the waitlist!" });
   } catch (err: any) {
     console.error("[waitlist] Unexpected error:", err);
+    
+    // Check for fetch errors (usually network/env var issues)
+    if (err?.message?.includes("fetch failed") || err?.code === "ENOTFOUND" || err?.code === "ECONNREFUSED") {
+      return NextResponse.json({ 
+        error: "Database connection failed",
+        details: "Unable to connect to database. Please check environment variables.",
+        message: err.message
+      }, { status: 500 });
+    }
+    
+    // Check for missing environment variables
+    if (err?.message?.includes("env var missing") || err?.message?.includes("Missing Supabase")) {
+      return NextResponse.json({ 
+        error: "Configuration error",
+        details: err.message
+      }, { status: 500 });
+    }
+    
     return NextResponse.json({ 
       error: "Unexpected error. Please try again.",
-      details: process.env.NODE_ENV === "development" ? err.message : undefined
+      details: err.message || "Unknown error occurred"
     }, { status: 500 });
   }
 }
