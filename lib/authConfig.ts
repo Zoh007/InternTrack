@@ -24,8 +24,25 @@ if (
   );
 }
 
+// Validate required NextAuth environment variables
+const nextAuthUrl = process.env.NEXTAUTH_URL;
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
+
+if (!nextAuthUrl) {
+  console.warn("[auth] Warning: NEXTAUTH_URL is not set. NextAuth may not work correctly.");
+}
+
+if (!nextAuthSecret) {
+  console.warn("[auth] Warning: NEXTAUTH_SECRET is not set. This is required for production.");
+}
+
+if (providers.length === 0) {
+  console.warn("[auth] Warning: No authentication providers configured. Set GOOGLE_CLIENT_ID/SECRET or AZURE_AD_* env vars.");
+}
+
 export const authOptions: any = {
   providers,
+  secret: nextAuthSecret,
   session: { strategy: "jwt" as const },
   callbacks: {
     async signIn({ user, account, profile }: any) {
@@ -58,8 +75,10 @@ export const authOptions: any = {
             console.error("[auth] Failed to save user to Supabase:", error);
             // Don't block sign-in if DB save fails
           }
-        } catch (err) {
-          console.error("[auth] Error saving user:", err);
+        } catch (err: any) {
+          console.error("[auth] Error saving user to Supabase:", err?.message || err);
+          // Don't block sign-in if DB connection fails
+          // This allows auth to work even if Supabase is misconfigured
         }
       }
       return true;
