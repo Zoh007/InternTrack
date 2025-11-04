@@ -66,27 +66,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, message: "You're on the waitlist!" });
   } catch (err: any) {
     console.error("[waitlist] Unexpected error:", err);
+    console.error("[waitlist] Error type:", err?.constructor?.name);
+    console.error("[waitlist] Error message:", err?.message);
+    console.error("[waitlist] Error stack:", err?.stack);
     
     // Check for fetch errors (usually network/env var issues)
-    if (err?.message?.includes("fetch failed") || err?.code === "ENOTFOUND" || err?.code === "ECONNREFUSED") {
+    const errorMessage = err?.message || String(err) || "";
+    const isFetchError = errorMessage.includes("fetch failed") || 
+                         errorMessage.includes("fetch") ||
+                         err?.code === "ENOTFOUND" || 
+                         err?.code === "ECONNREFUSED" ||
+                         err?.name === "TypeError" && errorMessage.includes("fetch");
+    
+    if (isFetchError) {
       return NextResponse.json({ 
         error: "Database connection failed",
-        details: "Unable to connect to database. Please check environment variables.",
-        message: err.message
+        details: "Cannot connect to Supabase database. This usually means environment variables are not set in Vercel.",
+        message: errorMessage,
+        hint: "Go to Vercel Project Settings → Environment Variables and add: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY",
+        debug: process.env.NODE_ENV === "development" ? {
+          hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+          hasKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY || !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        } : undefined
       }, { status: 500 });
     }
     
     // Check for missing environment variables
-    if (err?.message?.includes("env var missing") || err?.message?.includes("Missing Supabase")) {
+    if (errorMessage.includes("env var missing") || errorMessage.includes("Missing Supabase") || errorMessage.includes("Missing")) {
       return NextResponse.json({ 
         error: "Configuration error",
-        details: err.message
+        details: errorMessage,
+        hint: "Set environment variables in Vercel: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
       }, { status: 500 });
     }
     
     return NextResponse.json({ 
       error: "Unexpected error. Please try again.",
-      details: err.message || "Unknown error occurred"
+      details: errorMessage || "Unknown error occurred",
+      type: err?.constructor?.name || typeof err
     }, { status: 500 });
   }
 }
