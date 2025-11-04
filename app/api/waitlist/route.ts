@@ -26,7 +26,9 @@ export async function POST(request: Request) {
       // Return more specific error message for debugging
       return NextResponse.json({ 
         error: "Database error", 
-        details: process.env.NODE_ENV === "development" ? dbError.message : undefined 
+        details: dbError.message || dbError.details || "Unknown database error",
+        code: dbError.code || "unknown",
+        hint: dbError.hint || undefined
       }, { status: 500 });
     }
 

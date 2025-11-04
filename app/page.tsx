@@ -35,7 +35,12 @@ export default function HomePage() {
         body: JSON.stringify({ email: emailTrimmed }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Something went wrong");
+      if (!res.ok) {
+        const errorMsg = data?.details 
+          ? `${data.error}: ${data.details}` 
+          : data?.error || "Something went wrong";
+        throw new Error(errorMsg);
+      }
       setMessage("You're on the waitlist! We'll be in touch soon.");
       setEmail("");
     } catch (err: any) {
