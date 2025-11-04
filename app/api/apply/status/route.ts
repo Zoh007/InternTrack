@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { getSupabaseServerClient } from "../../../../lib/supabaseServer";
 import { authOptions } from "../../../../lib/authConfig";
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions) as any;

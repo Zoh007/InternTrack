@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -33,7 +33,7 @@ type JobFound = {
   created_at: string;
 };
 
-export default function LiveDashboardPage() {
+function LiveDashboardContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -659,6 +659,19 @@ export default function LiveDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LiveDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto py-12 px-4 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-lg">Loading dashboard...</p>
+      </div>
+    }>
+      <LiveDashboardContent />
+    </Suspense>
   );
 }
 
