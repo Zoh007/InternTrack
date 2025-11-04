@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import puppeteer, { Browser, Page } from "puppeteer";
+import puppeteer, { Browser, Page, ElementHandle } from "puppeteer";
 
 interface ResumeData {
   raw_text: string;
@@ -646,7 +646,7 @@ async function fillField(page: Page, field: FormField, value: string, resumeFile
 async function attemptSubmit(page: Page): Promise<boolean> {
   try {
     // First, try standard CSS selectors for submit buttons
-    let submitButton = await page.$("button[type='submit'], input[type='submit']");
+    let submitButton: ElementHandle<Element> | null = await page.$("button[type='submit'], input[type='submit']");
     
     // If not found, try to find buttons by text content using evaluate
     if (!submitButton) {
@@ -673,7 +673,8 @@ async function attemptSubmit(page: Page): Promise<boolean> {
       if (buttonHandle) {
         const element = buttonHandle.asElement();
         if (element) {
-          submitButton = element as ElementHandle<HTMLInputElement | HTMLButtonElement>;
+          // Cast to ElementHandle<Element> since we know it's an Element from querySelector
+          submitButton = element as ElementHandle<Element>;
         } else {
           await buttonHandle.dispose();
         }
