@@ -170,7 +170,9 @@ export async function POST(request: Request) {
 
       if (jsonUploadError) {
         // If bucket doesn't exist error, try to create it and retry
-        if (jsonUploadError.statusCode === '404' || jsonUploadError.message?.includes('Bucket not found')) {
+        const errorMessage = (jsonUploadError as any).message || String(jsonUploadError);
+        const statusCode = (jsonUploadError as any).statusCode || (jsonUploadError as any).status;
+        if (statusCode === '404' || statusCode === 404 || errorMessage.includes('Bucket not found')) {
           console.warn("[upload-resume] Bucket not found, attempting to create it...");
           const { error: createError } = await supabase.storage.createBucket("resumes", {
             public: true,
