@@ -4,6 +4,15 @@ import { getSupabaseServerClient } from "../../../lib/supabaseServer";
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
+  // Log at the start for debugging
+  console.log("[waitlist] POST request received");
+  console.log("[waitlist] Environment check:", {
+    hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    urlPreview: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 30) || "NOT SET"
+  });
+  
   try {
     const body = await request.json().catch(() => null);
     const email: string | undefined = body?.email?.toString().trim();
