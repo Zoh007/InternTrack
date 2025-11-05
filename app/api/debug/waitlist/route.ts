@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServerClient } from "../../../lib/supabaseServer";
+import { getSupabaseServerClient } from "../../../../lib/supabaseServer";
 
 export async function GET(request: Request) {
   // Debug endpoint to check environment variables and Supabase connection
