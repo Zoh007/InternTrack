@@ -34,15 +34,13 @@ export function getSupabaseServerClient() {
     console.log("[Supabase] Connecting to:", url.substring(0, 30) + "...");
   }
 
-  // Vercel serverless functions need explicit fetch configuration
-  // Next.js 14 provides fetch globally, but we need to ensure it works in serverless context
+  // Configure Supabase client for serverless environments
+  // Use default fetch - Next.js 14 has native fetch support
   return createClient(url, key, {
-    auth: { persistSession: false },
-    global: {
-      fetch: (...args: Parameters<typeof fetch>) => {
-        // Use globalThis.fetch to ensure we get the correct fetch in serverless
-        return globalThis.fetch(...args);
-      },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   });
 }
