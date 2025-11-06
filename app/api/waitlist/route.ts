@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "../../../lib/supabaseServer";
 
+// GET handler for testing/debugging
+export async function GET(request: Request) {
+  return NextResponse.json({ 
+    message: "Waitlist API endpoint is working",
+    method: "Use POST to submit an email",
+    endpoint: "/api/waitlist",
+    status: "active"
+  }, { status: 200 });
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
