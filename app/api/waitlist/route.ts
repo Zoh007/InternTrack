@@ -44,8 +44,9 @@ export async function POST(request: Request) {
       // If Supabase client fails, try direct REST API call
       console.error("[waitlist] Supabase client failed, trying direct REST API:", fetchError);
       
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      // Trim whitespace to handle trailing newlines from Vercel
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+      const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim();
       
       if (!supabaseUrl || !supabaseKey) {
         throw new Error("Supabase configuration missing");
