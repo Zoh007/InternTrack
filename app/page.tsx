@@ -50,30 +50,32 @@ export default function HomePage() {
     }
   }
 
-  // Only redirect logged-in users if they explicitly want to access the app
-  // Don't auto-redirect, let them see the landing page first
-  // useEffect(() => {
-  //   const checkUserAndRedirect = async () => {
-  //     if (status === "loading") return;
-  //     if (session?.user?.email) {
-  //       try {
-  //         const response = await fetch("/api/user/check");
-  //         if (response.ok) {
-  //           const data = await response.json();
-  //           if (data.exists) {
-  //             router.push("/apply");
-  //             return;
-  //           }
-  //         }
-  //       } catch (error) {
-  //         console.error("Failed to check user:", error);
-  //       }
-  //     }
-  //   };
-  //   checkUserAndRedirect();
-  // }, [session, status, router]);
+  // Redirect logged-in users to the resume upload page
+  useEffect(() => {
+    if (status === "loading") return;
+    if (session?.user?.email) {
+      router.push("/apply");
+    }
+  }, [session, status, router]);
 
-  // Show landing page immediately - no loading state for public access
+  // Show loading state while checking authentication
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    );
+  }
+
+  // Don't render landing page for logged-in users (they'll be redirected)
+  if (session?.user?.email) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-600">Redirecting...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-16">
       {/* Landing page content */}
@@ -91,7 +93,7 @@ export default function HomePage() {
         <p className="mt-5 text-gray-600 max-w-2xl mx-auto">
           Find roles faster, apply automatically with AI, and prepare for interviews in company-specific hubs—all in one place.
         </p>
-        {/* <div className="mt-7 flex justify-center gap-3">
+        <div className="mt-7 flex justify-center gap-3">
           {session ? (
             <>
               <button 
@@ -115,7 +117,7 @@ export default function HomePage() {
               Get started free
             </button>
           )}
-        </div> */}
+        </div>
       </section>
 
       <section className="grid md:grid-cols-3 gap-6">
@@ -151,7 +153,7 @@ export default function HomePage() {
       </section>
 
       {/* Waitlist form */}
-      <section className="text-center py-12">
+      {/* <section className="text-center py-12">
         <h2 className="text-3xl font-bold mb-4">Join the Waitlist</h2>
         <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
           Be among the first to experience InternTrack when we launch.
@@ -188,7 +190,7 @@ export default function HomePage() {
             </p>
           )}
         </form>
-      </section>
+      </section> */}
 
       <AuthModal open={open} setOpen={setOpen} />
     </div>

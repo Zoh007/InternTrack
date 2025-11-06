@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { parsePdfClientSide } from "../../lib/resumeTextProcessor";
 
 export default function ApplyPage() {
   const { data: session, status } = useSession();
@@ -169,9 +170,23 @@ export default function ApplyPage() {
     setIsUploadingResume(true);
 
     try {
+      // Step 1: Parse PDF client-side using pdf.js (free, no server cost)
+      console.log("[upload] Starting client-side PDF parsing...");
+      const parseResult = await parsePdfClientSide(resumeFile);
+      
+      if (!parseResult.success || !parseResult.text) {
+        throw new Error(parseResult.error || "Failed to extract text from PDF. Please ensure your PDF contains selectable text (not just scanned images).");
+      }
+
+      console.log("[upload] Client-side parsing successful!");
+      console.log("[upload] Extracted text length:", parseResult.text.length, "characters");
+      console.log("[upload] Preview:", parseResult.text.substring(0, 300));
+
+      // Step 2: Send file + parsed text to server
       const formData = new FormData();
       formData.append("resume", resumeFile);
       formData.append("additionalInfo", additionalInfo);
+      formData.append("parsedText", parseResult.text); // Send pre-parsed text
 
       const response = await fetch("/api/apply/upload-resume", {
         method: "POST",
@@ -183,9 +198,12 @@ export default function ApplyPage() {
         throw new Error(errorData.error || "Failed to upload resume");
       }
 
+      const data = await response.json();
+      console.log("[upload] Resume uploaded successfully:", data);
+
       setCurrentStep("preferences");
     } catch (error) {
-      console.error(error);
+      console.error("[upload] Error:", error);
       alert(error instanceof Error ? error.message : "Failed to upload resume. Please try again.");
     } finally {
       setIsUploadingResume(false);

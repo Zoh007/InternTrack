@@ -7,47 +7,127 @@ import { authOptions } from "../../../../lib/authConfig";
 async function parsePDF(buffer: Buffer): Promise<{ text: string }> {
   return new Promise((resolve, reject) => {
     try {
+      console.log("[parsePDF] Starting PDF parsing...");
+      console.log("[parsePDF] Buffer size:", buffer.length, "bytes");
+      
       const PDFParser = require('pdf2json');
       const pdfParser = new PDFParser(null, 1);
       
       let textContent = '';
       
       pdfParser.on('pdfParser_dataError', (errData: any) => {
+        console.error("[parsePDF] PDF parsing error:", errData);
         reject(new Error(`PDF parsing error: ${errData.parserError}`));
       });
       
       pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
         try {
-          // Extract text from all pages
+          console.log("[parsePDF] PDF data ready!");
+          console.log("[parsePDF] PDF has pages:", pdfData.Pages ? pdfData.Pages.length : 0);
+          
+          // Extract text from all pages - parse everything thoroughly
           if (pdfData.Pages && Array.isArray(pdfData.Pages)) {
-            pdfData.Pages.forEach((page: any) => {
+            pdfData.Pages.forEach((page: any, pageIndex: number) => {
+              console.log(`[parsePDF] Processing page ${pageIndex + 1}...`);
+              const pageTexts = page.Texts ? page.Texts.length : 0;
+              console.log(`[parsePDF] Page ${pageIndex + 1} has ${pageTexts} text elements`);
+              
+              let pageText = '';
+              
               if (page.Texts && Array.isArray(page.Texts)) {
-                page.Texts.forEach((text: any) => {
+                // Sort texts by Y position (top to bottom) and X position (left to right) for proper reading order
+                const sortedTexts = [...page.Texts].sort((a: any, b: any) => {
+                  const yA = a.y || 0;
+                  const yB = b.y || 0;
+                  // Sort top-to-bottom first, then left-to-right
+                  if (Math.abs(yA - yB) > 5) { // Different line (5pt threshold)
+                    return yA - yB; // Smaller Y appears first (top of page)
+                  }
+                  return (a.x || 0) - (b.x || 0); // Same line, sort by X
+                });
+                
+                sortedTexts.forEach((text: any, textIndex: number) => {
                   if (text.R && Array.isArray(text.R)) {
                     text.R.forEach((run: any) => {
                       if (run.T) {
                         // Decode URI-encoded text
                         try {
-                          textContent += decodeURIComponent(run.T) + ' ';
+                          const decodedText = decodeURIComponent(run.T);
+                          pageText += decodedText;
+                          if (textIndex < 5) { // Log first few text elements for debugging
+                            console.log(`[parsePDF] Page ${pageIndex + 1}, Text ${textIndex}: "${decodedText.substring(0, 50)}"`);
+                          }
                         } catch (e) {
-                          textContent += run.T + ' ';
+                          pageText += run.T;
+                          if (textIndex < 5) {
+                            console.log(`[parsePDF] Page ${pageIndex + 1}, Text ${textIndex} (raw): "${run.T.substring(0, 50)}"`);
+                          }
                         }
                       }
                     });
+                  } else {
+                    // Some PDFs might have text directly without R array
+                    if (text.T) {
+                      try {
+                        const decodedText = decodeURIComponent(text.T);
+                        pageText += decodedText;
+                        console.log(`[parsePDF] Page ${pageIndex + 1}, Direct text: "${decodedText.substring(0, 50)}"`);
+                      } catch (e) {
+                        pageText += text.T;
+                      }
+                    }
+                  }
+                  
+                  // Add space between text elements (but not if it's already whitespace)
+                  if (!pageText.endsWith(' ') && !pageText.endsWith('\n')) {
+                    pageText += ' ';
                   }
                 });
+              } else {
+                console.warn(`[parsePDF] Page ${pageIndex + 1} has no Texts array`);
+              }
+              
+              // Add page text to total content with page separator
+              if (pageText.trim().length > 0) {
+                textContent += pageText.trim() + '\n\n';
+                console.log(`[parsePDF] Page ${pageIndex + 1} extracted ${pageText.trim().length} characters`);
+              } else {
+                console.warn(`[parsePDF] Page ${pageIndex + 1} extracted no text!`);
               }
             });
+          } else {
+            console.warn("[parsePDF] PDF has no Pages array or Pages is not an array");
+            console.log("[parsePDF] PDF data structure:", Object.keys(pdfData));
+            
+            // Try alternative extraction methods
+            if (pdfData.formImage) {
+              console.log("[parsePDF] PDF has formImage, trying alternative extraction...");
+            }
           }
           
-          resolve({ text: textContent.trim() });
+          const finalText = textContent.trim();
+          console.log("[parsePDF] Total extracted text length:", finalText.length, "characters");
+          console.log("[parsePDF] Number of pages processed:", pdfData.Pages ? pdfData.Pages.length : 0);
+          console.log("[parsePDF] First 500 characters:", finalText.substring(0, 500));
+          console.log("[parsePDF] Last 200 characters:", finalText.substring(Math.max(0, finalText.length - 200)));
+          
+          if (finalText.length === 0) {
+            console.warn("[parsePDF] WARNING: No text extracted from PDF!");
+            console.log("[parsePDF] Full PDF structure:", JSON.stringify(pdfData, null, 2).substring(0, 1000));
+          }
+          
+          resolve({ text: finalText });
         } catch (error: any) {
+          console.error("[parsePDF] Error extracting text:", error);
+          console.error("[parsePDF] Error stack:", error?.stack);
           reject(new Error(`Error extracting text: ${error?.message || 'Unknown error'}`));
         }
       });
       
+      console.log("[parsePDF] Parsing buffer...");
       pdfParser.parseBuffer(buffer);
     } catch (error: any) {
+      console.error("[parsePDF] PDF parsing failed:", error);
       reject(new Error(`PDF parsing failed: ${error?.message || 'Unknown error'}`));
     }
   });
@@ -63,6 +143,7 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("resume") as File | null;
     const additionalInfo = formData.get("additionalInfo") as string | null;
+    const preParsedText = formData.get("parsedText") as string | null; // Client-side parsed text
 
     if (!file) {
       return NextResponse.json({ error: "Resume PDF file is required" }, { status: 400 });
@@ -103,24 +184,60 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Parse resume PDF
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Use client-side parsed text if available, otherwise parse server-side
+    console.log("[upload-resume] Starting resume upload for user:", session.user.email);
+    console.log("[upload-resume] File name:", file.name);
+    console.log("[upload-resume] File size:", file.size, "bytes");
+    console.log("[upload-resume] File type:", file.type);
+    
     let parsedResumeText = "";
 
-    // Try to parse PDF
-    try {
-      const pdfData = await parsePDF(buffer);
-      parsedResumeText = pdfData.text || "";
-    } catch (error) {
-      console.error("[upload-resume] PDF parsing error:", error);
-      // If parsing fails, we'll store the PDF anyway and extract text later when needed
-      // Or use OpenAI vision API as fallback
+    if (preParsedText && preParsedText.trim().length > 0) {
+      // Use client-side parsed text (free, already extracted in browser)
+      console.log("[upload-resume] Using client-side parsed text");
+      parsedResumeText = preParsedText.trim();
+      console.log("[upload-resume] Client-side parsed text length:", parsedResumeText.length, "characters");
+      console.log("[upload-resume] Preview (first 300 chars):", parsedResumeText.substring(0, 300));
+      
+      // Print the entire resume
+      try {
+        console.log("[upload-resume] ===== BEGIN FULL RESUME TEXT DUMP (from client) =====");
+        console.log(`[upload-resume] Total length: ${parsedResumeText.length} characters`);
+        const lines = parsedResumeText.split(/\r?\n/);
+        lines.forEach((line, idx) => {
+          console.log(`[upload-resume] LINE ${idx + 1}: ${line}`);
+        });
+        console.log("[upload-resume] ===== END FULL RESUME TEXT DUMP =====");
+      } catch (dumpErr) {
+        console.warn("[upload-resume] Failed to dump full resume text:", dumpErr);
+      }
+    } else {
+      // Fallback: Parse server-side (if client-side parsing failed or wasn't available)
+      console.log("[upload-resume] Client-side parsing not available, falling back to server-side parsing...");
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      
+      try {
+        const pdfData = await parsePDF(buffer);
+        parsedResumeText = pdfData.text || "";
+        console.log("[upload-resume] Server-side PDF parsing successful!");
+        console.log("[upload-resume] Extracted text length:", parsedResumeText.length, "characters");
+        console.log("[upload-resume] Preview (first 300 chars):", parsedResumeText.substring(0, 300));
+      } catch (error: any) {
+        console.error("[upload-resume] Server-side PDF parsing error:", error);
+        console.error("[upload-resume] Error details:", error?.message || error);
+        console.error("[upload-resume] Error stack:", error?.stack);
+        // Continue - we'll validate text length later
+      }
     }
 
     // Store PDF in Supabase Storage
     const fileName = `resume_${userData.id}_${Date.now()}.pdf`;
     let resumeUrl = null;
+    
+    // Get buffer for file upload (needed for storage)
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
     try {
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -219,6 +336,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: "Resume uploaded successfully",
+      debug: {
+        parsedTextLength: parsedResumeText.length,
+        parsedTextPreview: parsedResumeText.substring(0, 500), // First 500 chars for debugging
+        fileName: fileName,
+        resumeUrl: resumeUrl,
+      },
     });
   } catch (error) {
     console.error("[upload-resume] Error:", error);
