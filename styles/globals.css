@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Resume Upload Loader Animations */
+@keyframes dots {
+  0%, 20% { content: ''; }
+  40% { content: '.'; }
+  60% { content: '..'; }
+  80%, 100% { content: '...'; }
+}
+
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes scaleIn {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes strokeCircle {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes strokeCheck {
+  to { stroke-dashoffset: 0; }
+}
+
 html, body {
   min-height: 100%;
   font-smooth: always;
