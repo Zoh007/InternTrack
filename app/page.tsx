@@ -81,6 +81,9 @@ export default function HomePage() {
         <p className="inline-flex items-center gap-2 text-xs font-medium text-blue-700 bg-blue-50 rounded-full px-3 py-1">
           <SparkleIcon /> New: AI auto-apply + company interview hubs
         </p>
+        <p className="mt-4 text-lg text-gray-700 font-medium">
+          Tired of missing out on jobs because your search is slow or scattered?
+        </p>
         <h1 className="mt-4 text-4xl md:text-6xl font-extrabold tracking-tight">
           Launch your career with
           <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent"> InternTrack</span>
@@ -117,27 +120,27 @@ export default function HomePage() {
 
       <section className="grid md:grid-cols-3 gap-6">
         <Feature
-          title="Smart search"
-          desc="Filter by role, skills, location, and more to discover the right opportunities."
+          title="Spend less time searching, land more interviews"
+          desc="Filter by role, skills, location, and more to discover the right opportunities faster than ever."
           icon={<SearchIcon />} />
         <Feature
-          title="AI auto-apply"
-          desc="Scan matching roles and apply automatically using tailored materials you control."
+          title="Apply to more jobs while you sleep"
+          desc="Scan matching roles and apply automatically using tailored materials you control—no manual work required."
           icon={<RobotIcon />} />
         <Feature
-          title="Application tracker"
+          title="Never lose track of where you stand"
           desc="Track your applications with a Kanban board: Saved → Applied → Interview → Offer → Rejected."
           icon={<TrackerIcon />} />
       </section>
 
       <section className="grid md:grid-cols-2 gap-6">
         <Feature
-          title="Interview prep"
-          desc="Company hubs, coding practice with 200+ questions, and behavioral builder with STAR stories."
+          title="Walk into interviews feeling confident and prepared"
+          desc="Company hubs, coding practice with 200+ questions, and behavioral builder with STAR stories to ace every interview."
           icon={<LightningIcon />} />
         <Feature
-          title="Readiness scoring"
-          desc="Get personalized readiness scores per company/role with skill diagnostics and auto prep plans."
+          title="Know exactly what to improve before you apply"
+          desc="Get personalized readiness scores per company/role with skill diagnostics and auto prep plans tailored to you."
           icon={<ChartIcon />} />
       </section>
 
