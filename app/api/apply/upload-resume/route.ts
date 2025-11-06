@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { getSupabaseServerClient } from "../../../../lib/supabaseServer";
 import { authOptions } from "../../../../lib/authConfig";
+import { extractResumeStructured } from "../../../../lib/resumeExtractor";
 
 // PDF parsing function using pdf2json (better Node.js compatibility)
 async function parsePDF(buffer: Buffer): Promise<{ text: string }> {
@@ -264,10 +265,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to store resume file" }, { status: 500 });
     }
 
+    // Step 3: Extract structured data (Regex first, GPT fallback)
+    console.log("[upload-resume] Starting structured extraction (regex + GPT)...");
+    let extractedData = null;
+    try {
+      extractedData = await extractResumeStructured(parsedResumeText);
+      console.log("[upload-resume] Extraction complete!");
+      console.log("[upload-resume] Extraction method:", extractedData.extractionMethod);
+      console.log("[upload-resume] Confidence:", (extractedData.confidence * 100).toFixed(1) + "%");
+      console.log("[upload-resume] Extracted fields:", Object.keys(extractedData).filter(k => !['extractionMethod', 'confidence', 'missingFields'].includes(k)));
+      
+      // Print the entire extracted data in JSON format for verification
+      console.log("[upload-resume] ===== FULL EXTRACTED DATA (JSON) =====");
+      console.log(JSON.stringify(extractedData, null, 2));
+      console.log("[upload-resume] ===== END EXTRACTED DATA =====");
+    } catch (extractError: any) {
+      console.error("[upload-resume] Extraction error (non-fatal):", extractError);
+      // Don't fail the upload if extraction fails - we still have the raw text
+    }
+
     // Store resume text as a JSON file in Supabase Storage alongside the PDF
     // This way we don't need to modify the database schema
     const resumeData = {
       raw_text: parsedResumeText,
+      structured_data: extractedData || null, // Add structured extraction results
       additional_info: additionalInfo || "",
       file_url: resumeUrl,
       file_name: fileName,
@@ -342,6 +363,21 @@ export async function POST(request: Request) {
         fileName: fileName,
         resumeUrl: resumeUrl,
       },
+      extracted: extractedData ? {
+        method: extractedData.extractionMethod,
+        confidence: extractedData.confidence,
+        fieldsFound: Object.keys(extractedData).filter(k => !['extractionMethod', 'confidence', 'missingFields'].includes(k) && extractedData[k as keyof typeof extractedData]),
+        missingFields: extractedData.missingFields,
+        preview: {
+          email: extractedData.email,
+          phone: extractedData.phone,
+          skillsCount: extractedData.skills?.length || 0,
+          experienceCount: extractedData.experience?.length || 0,
+          educationCount: extractedData.education?.length || 0,
+        },
+        // Include full extracted data for verification
+        fullData: extractedData,
+      } : null,
     });
   } catch (error) {
     console.error("[upload-resume] Error:", error);
