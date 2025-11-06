@@ -35,12 +35,30 @@ export function getSupabaseServerClient() {
   }
 
   // Configure Supabase client for serverless environments
-  // Use default fetch - Next.js 14 has native fetch support
+  // Vercel serverless functions need specific configuration for reliable connections
   return createClient(url, key, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
       detectSessionInUrl: false,
+    },
+    db: {
+      schema: 'public',
+    },
+    global: {
+      // Use fetch with proper error handling for serverless
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        // Add timeout for serverless environments (30 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        
+        return fetch(input, {
+          ...init,
+          signal: controller.signal,
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
+      },
     },
   });
 }
