@@ -10,6 +10,19 @@ export interface PdfParseResult {
   error?: string;
 }
 
+type PdfTextItemLike = {
+  str?: string;
+  transform?: number[];
+};
+
+function getItemX(item: PdfTextItemLike): number {
+  return Array.isArray(item.transform) ? (item.transform[4] ?? 0) : 0;
+}
+
+function getItemY(item: PdfTextItemLike): number {
+  return Array.isArray(item.transform) ? (item.transform[5] ?? 0) : 0;
+}
+
 /**
  * Extract text from PDF file using pdf.js (client-side)
  */
@@ -56,11 +69,11 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
         console.log(`[clientPdfParser] Page ${pageNum} has ${textContent.items.length} text items`);
         
         // Sort items by position (top to bottom, left to right)
-        const sortedItems = [...textContent.items].sort((a: any, b: any) => {
-          const yA = a.transform ? a.transform[5] : 0; // Y position
-          const yB = b.transform ? b.transform[5] : 0;
-          const xA = a.transform ? a.transform[4] : 0; // X position
-          const xB = b.transform ? b.transform[4] : 0;
+        const sortedItems = [...textContent.items].sort((a, b) => {
+          const yA = getItemY(a); // Y position
+          const yB = getItemY(b);
+          const xA = getItemX(a); // X position
+          const xB = getItemX(b);
           
           // Sort by Y first (top to bottom), then X (left to right)
           if (Math.abs(yA - yB) > 5) {
@@ -70,9 +83,9 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
         });
         
         let lastY: number | null = null;
-        sortedItems.forEach((item: any, index: number) => {
-          if (item.str) {
-            const currentY = item.transform ? item.transform[5] : 0;
+        sortedItems.forEach((item, index: number) => {
+          if ("str" in item && typeof item.str === "string" && item.str) {
+            const currentY = getItemY(item);
             
             // Add newline if we've moved to a new line
             if (lastY !== null && Math.abs(currentY - lastY) > 5) {
@@ -84,7 +97,7 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
             // Add space between items on same line (unless it's already whitespace)
             if (index < sortedItems.length - 1) {
               const nextItem = sortedItems[index + 1];
-              const nextY = nextItem.transform ? nextItem.transform[5] : 0;
+              const nextY = getItemY(nextItem);
               if (Math.abs(currentY - nextY) <= 5) {
                 // Same line, add space
                 pageText += ' ';
