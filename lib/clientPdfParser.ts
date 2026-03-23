@@ -10,17 +10,30 @@ export interface PdfParseResult {
   error?: string;
 }
 
-type PdfTextItemLike = {
-  str?: string;
-  transform?: number[];
-};
-
-function getItemX(item: PdfTextItemLike): number {
-  return Array.isArray(item.transform) ? (item.transform[4] ?? 0) : 0;
+function getItemTransform(item: unknown): number[] | null {
+  if (typeof item !== "object" || item === null) {
+    return null;
+  }
+  const maybeTransform = (item as { transform?: unknown }).transform;
+  return Array.isArray(maybeTransform) ? maybeTransform : null;
 }
 
-function getItemY(item: PdfTextItemLike): number {
-  return Array.isArray(item.transform) ? (item.transform[5] ?? 0) : 0;
+function getItemX(item: unknown): number {
+  const transform = getItemTransform(item);
+  return transform ? (transform[4] ?? 0) : 0;
+}
+
+function getItemY(item: unknown): number {
+  const transform = getItemTransform(item);
+  return transform ? (transform[5] ?? 0) : 0;
+}
+
+function getItemText(item: unknown): string | null {
+  if (typeof item !== "object" || item === null) {
+    return null;
+  }
+  const maybeText = (item as { str?: unknown }).str;
+  return typeof maybeText === "string" ? maybeText : null;
 }
 
 /**
@@ -84,7 +97,8 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
         
         let lastY: number | null = null;
         sortedItems.forEach((item, index: number) => {
-          if ("str" in item && typeof item.str === "string" && item.str) {
+          const itemText = getItemText(item);
+          if (itemText) {
             const currentY = getItemY(item);
             
             // Add newline if we've moved to a new line
@@ -92,7 +106,7 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
               pageText += '\n';
             }
             
-            pageText += item.str;
+            pageText += itemText;
             
             // Add space between items on same line (unless it's already whitespace)
             if (index < sortedItems.length - 1) {
@@ -108,7 +122,7 @@ export async function parsePdfClientSide(file: File): Promise<PdfParseResult> {
             
             // Log first few items for debugging
             if (index < 5) {
-              console.log(`[clientPdfParser] Page ${pageNum}, Item ${index}: "${item.str.substring(0, 50)}"`);
+              console.log(`[clientPdfParser] Page ${pageNum}, Item ${index}: "${itemText.substring(0, 50)}"`);
             }
           }
         });
