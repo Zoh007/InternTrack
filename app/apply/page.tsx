@@ -477,7 +477,7 @@ export default function ApplyPage() {
           </button>
         </div>
         <p className="text-gray-600">
-          Tell us what positions you're interested in, and we'll search the internet for matching jobs
+          Tell us what positions you&apos;re interested in, and we&apos;ll search the internet for matching jobs
         </p>
       </div>
 
@@ -609,7 +609,7 @@ export default function ApplyPage() {
           )}
           
           <p className="text-sm text-gray-500 mt-2">
-            Search and select locations worldwide where you'd like to work. You can select multiple locations from any country.
+            Search and select locations worldwide where you&apos;d like to work. You can select multiple locations from any country.
           </p>
         </div>
 
@@ -695,7 +695,7 @@ export default function ApplyPage() {
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-2">
-            We'll search the internet and apply to {formData.numberOfApplications} matching jobs based on your selected positions
+            We&apos;ll search the internet and apply to {formData.numberOfApplications} matching jobs based on your selected positions
           </p>
         </div>
 
